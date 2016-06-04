@@ -12,6 +12,11 @@ import org.apache.avro.file.DataFileWriter;
 import org.apache.avro.file.SeekableByteArrayInput;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.DatumWriter;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.reflect.ReflectDatumReader;
 import org.apache.avro.reflect.ReflectDatumWriter;
@@ -29,7 +34,7 @@ public class Utils
         System.out.println(gson.toJson(map));
     }
 
-    public static <T> byte[] serialize(String testType, T ... entityObjs) throws Exception {
+    public static <T> byte[] serializeWithFileWriter(String testType, T ... entityObjs) throws Exception {
 
         T entityObj1 = entityObjs[0];
         ReflectData rdata = ReflectData.AllowNull.get();
@@ -46,14 +51,32 @@ public class Utils
         }
         fileWriter.close();
 
-        byte[] bytes = baos.toByteArray();
-        return bytes;
+        byte[] binaryAvro = baos.toByteArray();
+        return binaryAvro;
     }
 
-    public static <T> List<GenericRecord> readGenericData(byte[] bytes) throws IOException
+    public static <T> byte[] serialize(String testType, T entityObj) throws Exception {
+
+        ReflectData rdata = ReflectData.AllowNull.get();
+
+        Schema schema = rdata.getSchema(entityObj.getClass());
+        ByteArrayOutputStream os = new ByteArrayOutputStream();
+        Encoder encoder = EncoderFactory.get().binaryEncoder(os, null);
+        DatumWriter<T> writer = new ReflectDatumWriter<T>(schema, rdata);
+        writer.write(entityObj, encoder);
+        encoder.flush();
+        byte[] binaryAvro = os.toByteArray();
+
+        // ISO-8859-1 is the encoding which handles all bytes and not UTF-8
+        // See https://issues.apache.org/jira/browse/AVRO-1650
+        String binaryString = new String (binaryAvro, "ISO-8859-1");
+        return binaryAvro;
+    }
+
+    public static <T> List<GenericRecord> readGenericDataWithFileWriter(byte[] binaryAvro) throws IOException
     {
         GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<GenericRecord> ();
-        SeekableByteArrayInput avroInputStream = new SeekableByteArrayInput(bytes);
+        SeekableByteArrayInput avroInputStream = new SeekableByteArrayInput(binaryAvro);
         DataFileReader<GenericRecord> fileReader = new DataFileReader<GenericRecord>(avroInputStream, datumReader);
 
         Schema schema = fileReader.getSchema();
@@ -67,10 +90,10 @@ public class Utils
         return records;
     }
 
-    public static <T> List<T> readReflectData(byte[] bytes) throws IOException
+    public static <T> List<T> readReflectDataWithFileWriter(byte[] binaryAvro) throws IOException
     {
         ReflectDatumReader<T> datumReader = new ReflectDatumReader<T> ();
-        SeekableByteArrayInput avroInputStream = new SeekableByteArrayInput(bytes);
+        SeekableByteArrayInput avroInputStream = new SeekableByteArrayInput(binaryAvro);
         DataFileReader<T> fileReader = new DataFileReader<T>(avroInputStream, datumReader);
 
         Schema schema = fileReader.getSchema();
@@ -82,5 +105,34 @@ public class Utils
         }
         fileReader.close();
         return records;
+    }
+
+    public static GenericRecord readGenericData(byte[] binaryAvro, Schema schema) {
+
+        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(binaryAvro, null);
+        GenericDatumReader<GenericRecord> datumReader = new GenericDatumReader<GenericRecord>(schema);
+
+        GenericRecord record = null;
+        try {
+            record = datumReader.read(record, decoder);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return record;
+    }
+
+    public static <T> T readReflectData(byte[] binaryAvro, Schema schema) {
+
+        ReflectData rdata = ReflectData.AllowNull.get();
+        BinaryDecoder decoder = DecoderFactory.get().binaryDecoder(binaryAvro, null);
+        ReflectDatumReader<T> datumReader = new ReflectDatumReader<T>(schema);
+
+        T record = null;
+        try {
+            record = datumReader.read(record, decoder);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return record;
     }
 }

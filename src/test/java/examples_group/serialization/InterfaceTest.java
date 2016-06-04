@@ -1,19 +1,13 @@
 package examples_group.serialization;
 
-import static org.junit.Assert.assertTrue;
-
-import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.List;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
-import org.apache.avro.io.DatumWriter;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.reflect.AvroEncode;
 import org.apache.avro.reflect.ReflectData;
-import org.apache.avro.reflect.ReflectDatumWriter;
 import org.junit.Test;
 
 /**
@@ -36,19 +30,20 @@ public class InterfaceTest
 
         // Serialize
         byte[] bytes = Utils.serialize("interface-test", data);
-        List<GenericRecord> records = Utils.readGenericData(bytes);
-        List<InterfaceWrapper> reflectRecords = Utils.readReflectData(bytes);
-
+        GenericRecord record = Utils.readGenericData(bytes, schema);
+        InterfaceWrapper reflectRecords = Utils.readReflectData(bytes, schema);
     }
 }
 
 class InterfaceWrapper
 {
+    //@AvroEncode(using = CustomMapEncoding.class)
     Map<NumberWrapper, NumberWrapper> map;
 }
 
 class NumberWrapper
 {
+    @AvroEncode(using = CustomNumberEncoding.class)
     Number num;
 
     public NumberWrapper()
